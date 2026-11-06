@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}錄影總覽 — RSAP{% endblock %}
+{% block page_title %}錄影總覽{% endblock %}
+{% block content %}
+{% if saved %}<div class="flash flash-ok">✅ {{ saved }}</div>{% endif %}
+{% if error %}<div class="flash flash-err">⚠️ {{ error }}</div>{% endif %}
+
+<form method="get" action="/" class="filter-bar">
+  <input type="search" name="q" value="{{ q }}" placeholder="搜尋電腦 / 帳號 / 檔名…" style="width:240px;" maxlength="100" autocomplete="off">
+  <select name="date" data-autosubmit title="依錄影日期篩選">
+    <option value="">全部日期</option>
+    {% for d, n in dates %}<option value="{{ d }}" {{ 'selected' if date == d else '' }}>{{ d }}({{ n }})</option>{% endfor %}
+  </select>
+  <select name="computer" data-autosubmit title="依電腦篩選">
+    <option value="">全部電腦</option>
+    {% for c in computers %}<option value="{{ c }}" {{ 'selected' if computer == c else '' }}>{{ c }}</option>{% endfor %}
+  </select>
+  {% if has_archive %}
+  <select name="loc" data-autosubmit title="來源:本機錄影資料夾或歸檔路徑(NAS)">
+    {% for k, v in locs.items() %}<option value="{{ k }}" {{ 'selected' if loc == k else '' }}>{{ v }}{% if k == 'archive' and archive_online is sameas false %}(離線){% endif %}</option>{% endfor %}
+  </select>
+  {% endif %}
+  <select name="sort" data-autosubmit title="排序">
+    <option value="newest" {{ 'selected' if sort == 'newest' else '' }}>最新在前</option>
+    <option value="oldest" {{ 'selected' if sort == 'oldest' else '' }}>最舊在前</option>
+    <option value="largest" {{ 'selected' if sort == 'largest' else '' }}>檔案最大</option>
+  </select>
+  <button type="submit" class="btn-sm">搜尋</button>
+  {% if q or date != latest_date or computer or loc or sort != 'newest' %}<a class="btn btn-sm" href="/" title="回到預設:最新一天、全部電腦、最新在前">清除</a>{% endif %}
+  <span class="spacer"></span>
+  <label class="muted" style="font-size:12.5px;display:flex;align-items:center;gap:6px;" title="滑鼠停在卡片上 0.5 秒播放靜音預覽">
+    <input type="checkbox" id="preview" class="switch">懸停預覽</label>
+  <span class="count" id="count">{{ total }} 部</span>
+</form>
+
+{% if can_write %}
+<div class="filter-bar" style="margin-top:-8px;">
+  <form method="post" action="/recordings/rescan" style="display:inline;">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <button type="submit" class="btn-sm" title="立即對帳錄影目錄與索引(背景亦依設定頁的掃描間隔定時執行)">⟳ 立即掃描</button>
+  </form>
+  <span class="muted" style="font-size:12px;">
+    {% if scan.error %}<span class="badge badge-deny">掃描錯誤</span> {{ scan.error }}
+    {% elif scan.last_scan %}最後掃描 {{ scan.last_scan.strftime('%m-%d %H:%M:%S') }}
+      {%- if scan.thumb_pending %} · 縮圖待產 {{ scan.thumb_pending }}{% endif %}
+    {% else %}尚未掃描{% endif %}
+    · 本機 {{ stats.count }} 部 / {{ stats.bytes|size }} · 磁碟剩餘 {{ stats.free|size }}
+    {% if has_archive %} · 歸檔 {{ stats.archive_count }} 部 / {{ stats.archive_bytes|size }}
+      {% if scan.archive_online is sameas false %}<span class="badge badge-deny" title="{{ scan.archive_error }}">歸檔離線</span>{% elif scan.archive_online %}<span class="badge badge-allow">歸檔連線中</span>{% endif %}{% endif %}
+  </span>
+</div>
+{% endif %}
+
+<div id="panel" data-snapshot="{{ snapshot }}">{% include "_panel_videos.html" %}</div>
+{% endblock %}
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+  const panel = document.getElementById('panel'), pv = document.getElementById('preview');
+  try { pv.checked = localStorage.getItem('rsap-preview') !== '0'; } catch (e) { pv.checked = true; }
+  pv.addEventListener('change', () => { try { localStorage.setItem('rsap-preview', pv.checked ? '1' : '0'); } catch (e) {} });
+  rsapBindCards(panel);
+  // 搜尋關鍵字標示(只操作文字節點)
+  const q = {{ q|tojson }}.toLowerCase();
+  function mark(root) {
+    if (!q) return;
+    root.querySelectorAll('.hl').forEach(el => {
+      const t = el.textContent, i = t.toLowerCase().indexOf(q);
+      if (i < 0) return;
+      el.textContent = '';
+      const m = document.createElement('mark'); m.textContent = t.slice(i, i + q.length);
+      el.append(t.slice(0, i), m, t.slice(i + q.length));
+    });
+  }
+  mark(panel);
+  rsapAutoRefresh(() => { rsapBindCards(panel); mark(panel); }, 30000);
+</script>
+{% endblock %}

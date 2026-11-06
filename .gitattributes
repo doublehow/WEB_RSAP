@@ -1,0 +1,2 @@
+# shell 腳本在 Linux 執行,強制 LF(Windows checkout 也不得轉 CRLF)
+*.sh text eol=lf

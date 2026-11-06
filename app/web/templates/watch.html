@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}{{ rec.title }} — RSAP{% endblock %}
+{% block page_title %}觀看:{{ rec.filename }}{% endblock %}
+{% block head %}
+<style>
+  .watch { display:grid; grid-template-columns:minmax(0, 1fr) 360px; gap:24px; align-items:start; }
+  .player { background:#000; border-radius:12px; overflow:hidden; aspect-ratio:16/9; max-height:78vh; }
+  .player video { width:100%; height:100%; display:block; background:#000; }
+  .w-title { font-size:19px; font-weight:600; margin:14px 0 6px; overflow-wrap:anywhere; }
+  .w-row { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .w-chan { display:flex; align-items:center; gap:10px; }
+  .w-chan .yt-avatar { width:40px; height:40px; }
+  .w-chan b { font-size:15px; }
+  .w-chan small { display:block; color:var(--text3); font-size:12px; }
+  .w-tools { margin-left:auto; display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .seg { display:inline-flex; border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
+  .seg button { border:none; border-radius:0; padding:5px 10px; font-size:12.5px; background:var(--bg2); }
+  .seg button + button { border-left:1px solid var(--border); }
+  .seg button.on { background:var(--accent); color:#fff; }
+  .w-desc { margin-top:14px; }
+  .w-desc .kv { display:grid; grid-template-columns:auto 1fr; gap:4px 16px; font-size:13px; }
+  .w-desc .kv span:nth-child(odd) { color:var(--text3); }
+  .rel h3 { margin:0 0 12px; font-size:14px; }
+  .rel-item { display:flex; gap:10px; text-decoration:none; color:inherit; padding:6px; border-radius:8px; }
+  .rel-item:hover { background:var(--row-hover); }
+  .rel-item.cur { background:color-mix(in srgb, var(--accent) 12%, transparent); }
+  .rel-thumb { width:150px; flex-shrink:0; aspect-ratio:16/9; border-radius:8px; overflow:hidden; background:var(--thumb-bg); position:relative; }
+  .rel-thumb img, .rel-thumb video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  .rel-text { min-width:0; font-size:12.5px; }
+  .rel-text b { display:block; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .rel-text span { color:var(--text3); display:block; }
+  @media (max-width: 1100px) { .watch { grid-template-columns:1fr; } }
+</style>
+{% endblock %}
+{% block content %}
+{% set back_q = ('?back=' ~ (back|urlencode)) if back else '' %}{# 總覽篩選狀態,上下一部 / 相關錄影連結帶著走 #}
+{% set err = request.query_params.get('error') %}
+{% if err %}<div class="flash flash-err">⚠️ {{ err }}</div>{% endif %}
+{% if rec.is_archive and archive_online is sameas false %}
+<div class="flash flash-err">⚠️ 此錄影在歸檔路徑(NAS),目前歸檔離線,暫時無法播放;索引與縮圖保留,連線恢復後自動可播。</div>
+{% elif not exists %}<div class="flash flash-err">⚠️ 錄影檔已不在{{ '歸檔路徑' if rec.is_archive else '錄影目錄' }}中(可能已被移走或刪除);索引將於下次掃描移除。</div>{% endif %}
+
+<div class="watch">
+  <div>
+    <div class="player">
+      <video id="v" controls autoplay preload="metadata" playsinline
+             {% if has_thumb %}poster="/thumb/{{ rec.id }}"{% endif %} src="/media/{{ rec.id }}"></video>
+    </div>
+    <div class="w-title">{{ rec.title }}{% if rec.computer %} <span class="muted" style="font-weight:400;">@ {{ rec.computer }}</span>{% endif %}</div>
+    <div class="w-row">
+      <div class="w-chan">
+        <div class="yt-avatar" style="background:hsl({{ rec.computer|hue }} 52% 46%);">{{ (rec.computer or rec.filename)[:1] }}</div>
+        <div><b>{{ rec.computer or '未知電腦' }}</b><small>{{ rec.recorded_at.strftime('%Y-%m-%d %H:%M:%S') }} · {{ rec.size_bytes|size }}{% if rec.duration_s %} · {{ rec.duration_s|duration }}{% endif %}</small></div>
+      </div>
+      <div class="w-tools">
+        <span class="seg" id="speed" title="播放速度(鍵盤 [ / ] 調整)">
+          {% for s in ('0.5', '1', '1.5', '2', '4') %}<button type="button" data-speed="{{ s }}" class="{{ 'on' if s == '1' else '' }}">{{ s }}x</button>{% endfor %}
+        </span>
+        {% if older %}<a class="btn btn-sm" href="/watch/{{ older.id }}{{ back_q }}" title="較早的一部&#10;{{ older.filename }}">◀ 上一部</a>{% endif %}
+        {% if newer %}<a class="btn btn-sm" href="/watch/{{ newer.id }}{{ back_q }}" title="較晚的一部&#10;{{ newer.filename }}">下一部 ▶</a>{% endif %}
+        <a class="btn btn-sm" href="/download/{{ rec.id }}" download>⬇ 下載</a>
+        {% if can_write %}
+        <form method="post" action="/recordings/{{ rec.id }}/delete" style="display:inline;" data-confirm="確定刪除「{{ rec.filename }}」?檔案與索引將一併移除,無法復原。">
+          <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+          <input type="hidden" name="back" value="{{ back }}">
+          <button type="submit" class="btn-sm btn-danger">刪除</button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+    <div class="card w-desc">
+      <div class="kv">
+        <span>檔名</span><span class="mono">{{ rec.filename }}</span>
+        <span>位置</span><span>{% if rec.is_archive %}<span class="badge badge-warn">歸檔</span> 歸檔路徑(NAS){% else %}<span class="badge badge-allow">本機</span> 錄影資料夾{% endif %}</span>
+        <span>電腦</span><span>{{ rec.computer or '—' }}</span>
+        <span>帳號</span><span>{{ rec.account or '—' }}</span>
+        <span>錄影時間</span><span>{{ rec.recorded_at.strftime('%Y-%m-%d %H:%M:%S') }}</span>
+        <span>大小</span><span>{{ rec.size_bytes|size }}</span>
+        <span>片長</span><span id="dur">{{ rec.duration_s|duration or '—' }}</span>
+        <span>入索引</span><span>{{ rec.uploaded_at.strftime('%Y-%m-%d %H:%M:%S') if rec.uploaded_at else '—' }}{% if rec.source_ip %} · 上傳自 {{ rec.source_ip }}{% endif %}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="rel">
+    <h3>同一台電腦的錄影</h3>
+    {% for r in related %}
+    <a class="rel-item" href="/watch/{{ r.id }}{{ back_q }}">
+      <div class="rel-thumb">
+        {% if r.thumb_state == 'ok' %}<img src="/thumb/{{ r.id }}" alt="" loading="lazy">
+        {% else %}<video class="lazy" data-src="/media/{{ r.id }}#t=1" preload="none" muted playsinline></video>{% endif %}
+        {% if r.duration_s %}<span class="yt-tag dur">{{ r.duration_s|duration }}</span>{% endif %}
+      </div>
+      <div class="rel-text"><b>{{ r.title }}</b><span>{{ r.computer }}</span><span>{{ r.recorded_at.strftime('%Y-%m-%d %H:%M') }} · {{ r.size_bytes|size }}</span></div>
+    </a>
+    {% else %}
+    <p class="muted" style="font-size:12.5px;">沒有其他錄影</p>
+    {% endfor %}
+    <p style="margin-top:14px;"><a class="link" href="/{% if rec.computer %}?computer={{ rec.computer|urlencode }}{% endif %}" style="font-size:12.5px;">→ 在總覽中查看此電腦全部錄影</a></p>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+  const v = document.getElementById('v'), seg = document.getElementById('speed');
+  const speeds = [0.5, 1, 1.5, 2, 4];
+  function setSpeed(r) {
+    v.playbackRate = r;
+    seg.querySelectorAll('button').forEach(b => b.classList.toggle('on', parseFloat(b.dataset.speed) === r));
+    try { localStorage.setItem('rsap-speed', String(r)); } catch (e) {}
+  }
+  seg.addEventListener('click', (e) => { const b = e.target.closest('button[data-speed]'); if (b) setSpeed(parseFloat(b.dataset.speed)); });
+  try { const s = parseFloat(localStorage.getItem('rsap-speed')); if (speeds.includes(s)) setSpeed(s); } catch (e) {}
+  // 鍵盤:空白 播放/暫停、← → 快退/快進 5 秒、[ ] 調速、F 全螢幕
+  document.addEventListener('keydown', (e) => {
+    if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+    const i = speeds.indexOf(v.playbackRate);
+    switch (e.key) {
+      case ' ': e.preventDefault(); v.paused ? v.play() : v.pause(); break;
+      case 'ArrowLeft': v.currentTime = Math.max(0, v.currentTime - 5); break;
+      case 'ArrowRight': v.currentTime = Math.min(v.duration || 0, v.currentTime + 5); break;
+      case '[': if (i > 0) setSpeed(speeds[i - 1]); break;
+      case ']': if (i >= 0 && i < speeds.length - 1) setSpeed(speeds[i + 1]); break;
+      case 'f': case 'F': if (v.requestFullscreen) v.requestFullscreen(); break;
+    }
+  });
+  // 索引沒有片長(容器解析不到)時,以瀏覽器讀到的 metadata 補顯示
+  v.addEventListener('loadedmetadata', () => {
+    const d = document.getElementById('dur');
+    if (d && d.textContent.trim() === '—' && isFinite(v.duration) && v.duration > 0) {
+      const s = Math.floor(v.duration), h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), sec = s % 60;
+      const pad = (n) => String(n).padStart(2, '0');
+      d.textContent = h ? h + ':' + pad(m) + ':' + pad(sec) : m + ':' + pad(sec);
+    }
+  });
+  rsapBindCards(document.querySelector('.rel'));
+</script>
+{% endblock %}

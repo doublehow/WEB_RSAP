@@ -1,0 +1,16 @@
+# Web / API
+fastapi>=0.111
+uvicorn[standard]>=0.30
+jinja2>=3.1
+python-multipart>=0.0.9
+itsdangerous>=2.2
+
+# Data
+SQLAlchemy>=2.0
+pydantic>=2.7
+pydantic-settings>=2.3
+tzdata>=2024.1
+
+# AD (NTLM) auth + secret encryption (AES-GCM / MD4 shim)
+ldap3>=2.9
+pycryptodome>=3.20

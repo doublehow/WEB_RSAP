@@ -1,0 +1,40 @@
+{# 卡片格片段:整頁 include,自動更新時 ?partial=1 只回本片段 #}
+{% if items %}
+<div class="yt-grid">
+  {% for r in items %}
+  <a class="yt-card" href="/watch/{{ r.id }}{% if back_qs %}?back={{ back_qs|urlencode }}{% endif %}" data-media="/media/{{ r.id }}"
+     title="{{ r.filename }}&#10;錄影 {{ r.recorded_at.strftime('%Y-%m-%d %H:%M:%S') }}&#10;大小 {{ r.size_bytes|size }}{% if r.duration_s %}&#10;片長 {{ r.duration_s|duration }}{% endif %}{% if r.source_ip %}&#10;來源 {{ r.source_ip }}{% endif %}">
+    <div class="yt-thumb">
+      {% if r.thumb_state == 'ok' %}
+      <img src="/thumb/{{ r.id }}" alt="" loading="lazy" decoding="async">
+      {% else %}
+      <div class="ph"><svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div>
+      <video class="lazy" data-src="/media/{{ r.id }}#t=1" preload="none" muted playsinline></video>
+      {% endif %}
+      {% if r.duration_s %}<span class="yt-tag dur">{{ r.duration_s|duration }}</span>{% endif %}
+      <span class="yt-tag size">{{ r.size_bytes|size }}</span>
+      {% if r.is_archive %}<span class="yt-tag loc{{ ' off' if archive_online is sameas false else '' }}">{{ '歸檔·離線' if archive_online is sameas false else '歸檔' }}</span>{% endif %}
+    </div>
+    <div class="yt-meta">
+      <div class="yt-avatar" style="background:hsl({{ r.computer|hue }} 52% 46%);">{{ (r.computer or r.filename)[:1] }}</div>
+      <div class="yt-text">
+        <div class="yt-title hl">{{ r.title }}</div>
+        <div class="yt-sub"><span class="hl">{{ r.computer or '未知電腦' }}</span></div>
+        <div class="yt-sub">{{ r.recorded_at.strftime('%Y-%m-%d %H:%M') }}</div>
+      </div>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% if pages > 1 %}
+<div class="pager">
+  <a class="btn btn-sm" href="/?{{ base_qs }}&amp;page={{ page - 1 }}" {% if page <= 1 %}aria-disabled="true"{% endif %}>← 上一頁</a>
+  <span class="muted" style="font-size:12.5px;">第 {{ page }} / {{ pages }} 頁 · 每頁 {{ page_size }} 部 · 共 {{ total }} 部</span>
+  <a class="btn btn-sm" href="/?{{ base_qs }}&amp;page={{ page + 1 }}" {% if page >= pages %}aria-disabled="true"{% endif %}>下一頁 →</a>
+</div>
+{% endif %}
+{% else %}
+<div class="empty">
+  {% if q or date or computer %}沒有符合條件的錄影{% else %}尚無錄影 —— 用戶端上傳後,或掃描錄影目錄後即會出現{% endif %}
+</div>
+{% endif %}

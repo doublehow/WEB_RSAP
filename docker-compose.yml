@@ -1,0 +1,25 @@
+# RSAP 容器部署。狀態(DB / 金鑰 / config.json / 上傳 / 縮圖)全在一個 data volume;
+# image 可隨時重 build 重建,volume 不動。
+#
+#   正式:sudo install -d -o 1000 -g 1000 /srv/rsap/data && echo RSAP_PORT=8077 > .env && docker compose up -d
+#   驗證:./preprod-verify.sh(臨時目錄 + 臨時埠,驗完自動清除)
+#
+# 環境變數:RSAP_PORT(埠,**必填**,寫在 .env;未設定即拒絕啟動,避免默默開到預設埠撞埠)、
+# RSAP_DATA(host 資料目錄,預設 /srv/rsap/data)。
+# 埠採 host 與容器內同號(如 8077:8077)方便記憶與排錯;同機多實例依規劃各取 8001–8099 一號,
+# 每個實例獨立 .env(RSAP_PORT)與 compose project 名(-p)。
+services:
+  rsap:
+    build: .
+    image: rsap:latest
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Taipei
+      RSAP_WEB_PORT: "${RSAP_PORT:?請在 .env 設定 RSAP_PORT(8001-8099)}"   # 容器內監聽埠,與對外埠同號(Dockerfile HEALTHCHECK 讀此變數)
+    ports:
+      - "${RSAP_PORT:?請在 .env 設定 RSAP_PORT(8001-8099)}:${RSAP_PORT:?}"
+    volumes:
+      - ${RSAP_DATA:-/srv/rsap/data}:/opt/rsap/data
+      # 歸檔 NAS:host 先以 CIFS 掛載(fstab 加 _netdev,soft,uid=1000,gid=1000),
+      # 設定頁「網路路徑」填 /archive,帳密留空,存檔後按「連線測試」建立就緒標記;host 未掛載時僅視為離線。
+      - /mnt/rsap-archive:/archive

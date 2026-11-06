@@ -1,0 +1,25 @@
+# 與 .gitignore 對齊:執行期資料與本機環境不進 build context
+.git
+.gitignore
+.venv
+venv
+__pycache__
+**/__pycache__
+*.py[cod]
+data
+config.json
+.env
+*.db
+*.log
+logs
+RCD_Upload
+.vscode
+.idea
+.claude
+.DS_Store
+Thumbs.db
+start_rsap.cmd
+*.md
+Dockerfile
+docker-compose.yml
+preprod-verify.sh
